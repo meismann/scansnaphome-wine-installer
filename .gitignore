@@ -1,0 +1,10 @@
+# ScanSnap installers and other Windows binaries (proprietary, large)
+*.exe
+*.msi
+*.nupkg
+
+# local artifacts of the original setup session
+backup-launcher/
+backtrace.txt
+__pycache__/
+WinSSHOfflineInstaller*.exe

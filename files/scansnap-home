@@ -1,0 +1,96 @@
+#!/usr/bin/env python3
+"""Start ScanSnap Home under Wine and hide its empty helper windows.
+
+SshRegister.exe ("ScanSnap Home") and SshCloudMonitor.exe ("Form1") create
+invisible, minimized message-only forms. Under Wine they show up as tiny
+title bars with garbage content, so this script iconifies them and removes
+them from the taskbar/pager while ScanSnap Home is running.
+
+The scan window ("ScanSnap Home - Scan") is minimized by ScanSnap Home at scan
+start. When processing ends, the app puts the still-minimized window back into
+the taskbar, and Wine then re-maps the X window as a normal (frozen) window.
+Whenever the scan window is visible on the X side, RestoreIfMinimized.exe
+restores it on the Windows side if Windows still considers it minimized, so
+it stays usable for the next scan. While scanning it is iconified on X and
+left alone.
+"""
+import ctypes
+import os
+import subprocess
+import time
+
+WINEPREFIX = os.environ.get("SCANSNAP_WINEPREFIX", "@WINEPREFIX@")  # filled in by install-scansnap-home.sh
+EXE = r"C:\Program Files (x86)\PFU\ScanSnap\Home\PfuSshMain.exe"
+# (WM_CLASS instance, window title) of the helper windows to hide
+HELPERS = {("sshregister.exe", "ScanSnap Home"), ("sshcloudmonitor.exe", "Form1")}
+# Scan window: restore it on the Windows side whenever it is minimized there but shown on X
+SCAN_WINDOW = ("pfusshmain.exe", "ScanSnap Home - Scan")
+RESTORE_IF_MINIMIZED = os.path.expanduser("~/.local/share/scansnap-home/RestoreIfMinimized.exe")
+SCAN_RECHECK_SECONDS = 5
+POLL_SECONDS = 1
+STARTUP_GRACE = 60  # keep watching at least this long after launch
+
+
+def list_windows():
+    out = subprocess.run(["wmctrl", "-lx"], capture_output=True, text=True).stdout
+    for line in out.splitlines():
+        parts = line.split(None, 4)
+        if len(parts) == 5:
+            wid, _desk, wmclass, _host, title = parts
+            yield int(wid, 16), wmclass.split(".exe.")[0] + ".exe", title
+
+
+def wm_state(wid):
+    out = subprocess.run(["xprop", "-id", hex(wid), "_NET_WM_STATE"], capture_output=True, text=True).stdout
+    return out.split("=", 1)[1] if "=" in out else ""
+
+
+def restore_if_minimized_on_windows_side(title, env):
+    subprocess.run(["wine", RESTORE_IF_MINIMIZED, title], env=env, capture_output=True, text=True)
+
+
+def scansnap_running():
+    out = subprocess.run(["ps", "-eo", "args"], capture_output=True, text=True).stdout
+    return any(line.startswith("C:") and "\\PFU\\ScanSnap\\Home\\" in line for line in out.splitlines())
+
+
+def main():
+    env = dict(os.environ, WINEPREFIX=WINEPREFIX)
+    env.setdefault("WINEDEBUG", "-all")
+    subprocess.Popen(["wine", EXE], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     start_new_session=True)
+
+    x11 = ctypes.cdll.LoadLibrary("libX11.so.6")
+    x11.XOpenDisplay.restype = ctypes.c_void_p
+    x11.XDefaultScreen.argtypes = [ctypes.c_void_p]
+    x11.XIconifyWindow.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int]
+    x11.XFlush.argtypes = [ctypes.c_void_p]
+    display = x11.XOpenDisplay(None)
+    if not display:
+        return
+    screen = x11.XDefaultScreen(display)
+
+    hidden = set()
+    scan_checked_at = {}  # scan window id -> time of last Windows-side check while visible
+    started = time.monotonic()
+    while time.monotonic() - started < STARTUP_GRACE or scansnap_running():
+        for wid, wmclass, title in list_windows():
+            if (wmclass, title) in HELPERS and wid not in hidden:
+                subprocess.run(["wmctrl", "-i", "-r", hex(wid), "-b", "add,skip_taskbar,skip_pager"])
+                x11.XIconifyWindow(display, wid, screen)
+                x11.XFlush(display)
+                hidden.add(wid)
+            elif (wmclass, title) == SCAN_WINDOW:
+                if "_NET_WM_STATE_HIDDEN" in wm_state(wid):
+                    scan_checked_at.pop(wid, None)  # iconified on X: next time it shows up, check at once
+                    continue
+                now = time.monotonic()
+                if now - scan_checked_at.get(wid, 0) < SCAN_RECHECK_SECONDS:
+                    continue
+                scan_checked_at[wid] = now
+                restore_if_minimized_on_windows_side(title, env)
+        time.sleep(POLL_SECONDS)
+
+
+if __name__ == "__main__":
+    main()
