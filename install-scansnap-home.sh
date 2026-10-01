@@ -93,7 +93,11 @@ setup_prefix() {
 
 install_dotnet() {
     log ".NET Framework 4.8 installieren (dauert einige Minuten)"
-    if wine reg query 'HKLM\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full' /v Release 2>/dev/null | grep -qi 'Release'; then
+    # Wine-Mono setzt denselben Registry-Schlüssel "Release" wie echtes .NET. Mono kann aber die
+    # WCF-Named-Pipe-Konfiguration nicht auswerten (NotImplementedException in
+    # NetNamedPipeBindingElement), deshalb gilt nur das echte .NET (clr.dll) als installiert.
+    if [ -f "$DRIVE_C/windows/Microsoft.NET/Framework/v4.0.30319/clr.dll" ] \
+        && wine reg query 'HKLM\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full' /v Release 2>/dev/null | grep -qi 'Release'; then
         info "Bereits installiert."
     else
         winetricks -q dotnet48 || die "winetricks dotnet48 fehlgeschlagen."
