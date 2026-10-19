@@ -1,171 +1,170 @@
-# ScanSnap Home unter Linux mit Wine
+# ScanSnap Home on Linux with Wine
 
-Dieses Repository enthält ein Skript, das **ScanSnap Home** (die Windows-Software für Scanner der
-Reihe ScanSnap von PFU/Ricoh) unter Linux mit Wine installiert. Es wendet außerdem alle Anpassungen
-an, die ScanSnap Home unter Wine brauchbar machen. Damit kannst du auf einem Linux-Rechner mit
-ScanSnap Home scannen, einschließlich **durchsuchbarer PDFs** (Texterkennung), automatischer
-Dokumenterkennung und der Dokumentverwaltung von ScanSnap Home.
+This repository contains a script that installs **ScanSnap Home** (the Windows software for
+PFU/Ricoh ScanSnap scanners) on Linux using Wine. It also applies all the tweaks that make
+ScanSnap Home usable under Wine. This lets you scan on a Linux machine with ScanSnap Home,
+including **searchable PDFs** (text recognition), automatic document detection and ScanSnap Home's
+document management.
 
-> Wine startet ScanSnap Home, aber ohne Anpassungen scheitert es an vielen Stellen: Der Installer
-> lehnt die Windows-Version ab, die Fenster bleiben leer, die Programmteile können nicht miteinander
-> sprechen, die Texterkennung stürzt ab, und das Scan-Fenster friert nach dem Scan ein.
-> Das Skript behebt all das.
+> Wine starts ScanSnap Home, but without tweaks it fails in many places: the installer rejects the
+> Windows version, windows stay empty, the program components cannot talk to each other, text
+> recognition crashes, and the scan window freezes after a scan.
+> The script fixes all of this.
 
-## Was funktioniert und was nicht
+## What works and what doesn't
 
 | | |
 |---|---|
-| ✅ Scannen per **WLAN** | getestet mit ScanSnap iX1600 |
-| ✅ Durchsuchbare PDFs (OCR) | |
-| ✅ Dokumentverwaltung, Profile, Vorschau | |
-| ✅ Mehrere Scans hintereinander im selben Scan-Fenster | |
-| ❌ Scannen per **USB** | Wine kann den Windows-USB-Treiber des Scanners nicht laden |
-| ⚠️ Online-Update von ScanSnap Home | nicht verwenden: Ein Update überschreibt die angepassten Dateien (siehe [Nach einem Update](#nach-einem-update)) |
-| ⚠️ Scanner-Firmware-Update, Cloud-Dienste | nicht getestet |
+| ✅ Scanning via **Wi-Fi** | tested with ScanSnap iX1600 |
+| ✅ Searchable PDFs (OCR) | |
+| ✅ Document management, profiles, preview | |
+| ✅ Several consecutive scans in the same scan window | |
+| ❌ Scanning via **USB** | Wine cannot load the scanner's Windows USB driver |
+| ⚠️ Online update of ScanSnap Home | do not use: an update overwrites the patched files (see [After an update](#after-an-update)) |
+| ⚠️ Scanner firmware update, cloud services | not tested |
 
-## Getestet unter
+## Tested on
 
-| Komponente | Version |
+| Component | Version |
 |---|---|
-| Distribution | Linux Mint 22.2 „Zara“ (Basis Ubuntu 24.04), x86_64 |
-| Desktop | Cinnamon 6.4.14, X11-Sitzung |
+| Distribution | Linux Mint 22.2 "Zara" and Linux Mint 22.3 (based on Ubuntu 24.04), x86_64 |
+| Desktop | Cinnamon 6.4.14, X11 session |
 | Kernel | 7.0.0-34-generic |
-| Wine | wine-9.0 (Ubuntu 9.0~repack-4build3), 64-Bit-Präfix (`win64`) |
+| Wine | wine-9.0 (Ubuntu 9.0~repack-4build3), 64-bit prefix (`win64`) |
 | winetricks | 20240105 |
 | Python | 3.12.3 |
-| ScanSnap Home | 4.0.0 (Offline-Installer `WinSSHOfflineInstaller_4_0_0.exe`) |
-| Scanner | ScanSnap iX1600, per WLAN (Hotspot des Linux-Rechners) |
-| Hardware | Lenovo ThinkPad X1 Carbon, 7,6 GB RAM |
+| ScanSnap Home | 4.0.0 (offline installer `WinSSHOfflineInstaller_4_0_0.exe`) |
+| Scanner | ScanSnap iX1600, via Wi-Fi (hotspot of the Linux machine) |
+| Hardware | Lenovo ThinkPad X1 Carbon, 7.6 GB RAM |
 
-Andere Distributionen, Wine-Versionen, Desktops (vor allem Wayland) und ScanSnap-Home-Versionen
-sind **nicht getestet**. Die Anpassungen sind auf ScanSnap Home 4.0.0 zugeschnitten. Bei anderen
-Versionen können einzelne Schritte fehlschlagen. Das Skript bricht dann mit einer Meldung ab.
+Other distributions, Wine versions, desktops (especially Wayland) and ScanSnap Home versions
+are **not tested**. The tweaks are tailored to ScanSnap Home 4.0.0. With other versions,
+individual steps may fail. The script then aborts with a message.
 
-## Voraussetzungen
+## Requirements
 
-- Ein Offline-Installer von ScanSnap Home für Windows, z. B. `WinSSHOfflineInstaller_4_0_0.exe`
-  von der Download-Seite von PFU/Ricoh. **Der Installer ist nicht Teil dieses Repositorys.**
-- Pakete (Ubuntu / Linux Mint):
+- An offline installer of ScanSnap Home for Windows, e.g. `WinSSHOfflineInstaller_4_0_0.exe`
+  from the PFU/Ricoh download page. **The installer is not part of this repository.**
+- Packages (Ubuntu / Linux Mint):
 
   ```sh
   sudo dpkg --add-architecture i386 && sudo apt update
   sudo apt install wine wine32 wine64 winetricks winbind cabextract curl unzip python3 wmctrl x11-utils fonts-dejavu-core
   ```
 
-- Internetzugang während der Installation: winetricks lädt .NET 4.8 und Schriften herunter,
-  das Skript zusätzlich die Visual-C++-Laufzeit von Microsoft und Mono.Cecil von NuGet.
-- Etwa **10 GB** freier Speicherplatz (das Wine-Präfix belegt danach rund 8 GB) und mindestens
-  **3 GB freier Arbeitsspeicher**. Schließ vor der Installation große Programme wie Browser und
-  Mailprogramm. Auf dem Testrechner wurde der Installer einmal wegen Speichermangels abgebrochen.
-- Eine X11-Sitzung.
+- Internet access during installation: winetricks downloads .NET 4.8 and fonts; the script
+  additionally downloads the Visual C++ runtime from Microsoft and Mono.Cecil from NuGet.
+- About **10 GB** of free disk space (the Wine prefix takes up around 8 GB afterwards) and at least
+  **3 GB of free RAM**. Close large programs such as the browser and mail client before installing.
+  On the test machine, the installer was aborted once due to lack of memory.
+- An X11 session.
 
-## Benutzung
+## Usage
 
 ```sh
-git clone <dieses Repository>
-cd <Repository>
-./install-scansnap-home.sh /pfad/zu/WinSSHOfflineInstaller_4_0_0.exe
+git clone <this repository>
+cd <repository>
+./install-scansnap-home.sh /path/to/WinSSHOfflineInstaller_4_0_0.exe
 ```
 
-Standardmäßig wird ins Wine-Präfix `~/.wine` installiert. Ein eigenes Präfix wählst du mit
+By default, it installs into the Wine prefix `~/.wine`. To choose your own prefix, use
 `--prefix ~/.wine-scansnap`.
 
-Das Skript arbeitet die Schritte nacheinander ab. **An zwei Stellen musst du selbst klicken:**
+The script works through the steps one after another. **In two places you have to click yourself:**
 
-1. **Entpacken des Installers:** Der Offline-Installer entpackt sich und startet den eigentlichen
-   ScanSnap-Home-Installer. Falls Dialoge erscheinen, klickst du auf „Weiter“. Sobald der innere
-   Installer läuft, sichert das Skript ihn und beendet alles wieder. Eine Meldung „Dieses Produkt
-   kann nicht in der aktuellen Version von Windows installiert werden“ ist dabei normal.
-2. **Installation:** Das Skript startet die angepasste Kopie des Installers. Klick dich durch den
-   Assistenten und wähl als **Datenspeicherordner `C:\ScanSnapData`**. Unter Linux ist das
-   `~/.wine/drive_c/ScanSnapData`, dort landen deine Scans. Am Ende startet ScanSnap Home
-   den Verbindungsassistenten. Brich ihn ab und bestätige im Terminal mit Enter.
+1. **Unpacking the installer:** The offline installer unpacks itself and starts the actual
+   ScanSnap Home installer. If dialogs appear, click "Next". As soon as the inner installer is
+   running, the script backs it up and closes everything again. A message saying "This product
+   cannot be installed on the current version of Windows" is normal at this point.
+2. **Installation:** The script starts the patched copy of the installer. Click through the wizard
+   and choose **`C:\ScanSnapData` as the data storage folder**. On Linux this is
+   `~/.wine/drive_c/ScanSnapData`, which is where your scans end up. At the end, ScanSnap Home
+   starts the connection wizard. Cancel it and confirm in the terminal with Enter.
 
-Danach wendet das Skript die übrigen Anpassungen ohne weitere Eingaben an. Rechne insgesamt mit
-einer guten halben Stunde, allein .NET 4.8 braucht einige Minuten.
+After that, the script applies the remaining tweaks without further input. Expect a good half hour
+in total; .NET 4.8 alone takes several minutes.
 
-ScanSnap Home startest du anschließend über das Startmenü, die Verknüpfung auf dem Schreibtisch oder
-mit `~/.local/bin/scansnap-home`. Starte es nicht direkt mit `wine …PfuSshMain.exe`, sonst fehlen
-die Fensterkorrekturen des Startskripts (siehe unten).
+You start ScanSnap Home afterwards via the start menu, the desktop shortcut, or
+`~/.local/bin/scansnap-home`. Do not start it directly with `wine …PfuSshMain.exe`, otherwise the
+window fixes of the launcher script are missing (see below).
 
-### Scanner verbinden (WLAN)
+### Connecting the scanner (Wi-Fi)
 
-1. Bring den Scanner über sein Display ins WLAN, und zwar ins selbe Netz wie der Linux-Rechner.
-   Getestet wurde mit einem WLAN-Hotspot, den der Linux-Rechner selbst aufgespannt hat.
-2. Richte den Scanner im Verbindungsassistenten von ScanSnap Home ein und wähl dort die Verbindung
-   per WLAN.
+1. Connect the scanner to Wi-Fi via its display, to the same network as the Linux machine.
+   It was tested with a Wi-Fi hotspot created by the Linux machine itself.
+2. Set up the scanner in ScanSnap Home's connection wizard and choose the Wi-Fi connection there.
 
-## Was das Skript macht
+## What the script does
 
-| Problem unter Wine | Lösung im Skript |
+| Problem under Wine | Solution in the script |
 |---|---|
-| Der Installer meldet „nicht in der aktuellen Version von Windows installierbar“. Das Manifest des inneren Installers nennt nur Windows 7, dadurch meldet Windows ihm Version 6.2. | Windows-Version auf Windows 11 stellen und im Manifest einer Kopie des inneren Installers die Windows-7-Kennung durch die Windows-10-Kennung ersetzen |
-| Der Installer meldet „Keine Schreibrechte für den Datenspeicherordner“, weil `GetShellWindow()` unter Wine NULL liefert. | Import in der Installer-Kopie auf `GetFocus()` umbiegen, `GetAppdata.exe` bereitstellen |
-| ScanSnap Home braucht .NET 4.7 oder neuer. | `winetricks dotnet48` |
-| WPF-Fenster bleiben leer oder zeigen Artefakte (Render-Thread-Absturz `0x88980406`). | WPF-Hardwarebeschleunigung abschalten (`Avalon.Graphics\DisableHWAcceleration`) |
-| Kästchen statt Zeichen: Die App verlangt „Meiryo UI“, und `C:\windows\Fonts` ist leer. | `winetricks corefonts tahoma`, DejaVu Sans, Ersatz Meiryo → Arial |
-| Die Programmteile sprechen über WCF Named Pipes mit Windows-Anmeldung. Wine liefert dafür keine Anmeldedaten (SSPI `0x8009030e`). | In 13 `.config`-Dateien `security mode="None"` setzen und in 7 Assemblies die im Code erzeugten Pipe-Bindungen genauso umstellen (`tools/PipePatch.cs`, mit Mono.Cecil). Danach werden alle Methoden testweise JIT-übersetzt (`tools/JitCheck.cs`). |
-| Bildverarbeitung bricht mit Fehler −14 ab, Texterkennung mit „Allgemeine Schutzverletzung in Engine“, Fehler −6/−12 oder „alle Seiten leer“. Wines eigene `concrt140.dll` und `msvcp140.dll` fehlen Funktionen. | Aktuelle native Visual-C++-2015–2022-Laufzeit (x86) direkt aus `vc_redist.x86.exe` nach `syswow64` entpacken und Wine auf `native,builtin` stellen |
-| Leere Fenster („ScanSnap Home“, „Form1“) erscheinen beim Start, eines davon schwarz und bildschirmfüllend, und lassen sich nicht schließen. Das sind unsichtbare Hilfsformulare von `SshRegister.exe`, `SshCloudMonitor.exe` und `PfuSsMon.exe`. | Das Startskript `scansnap-home` blendet sie aus |
-| Das Scan-Fenster friert nach dem Scan ein. ScanSnap Home minimiert es beim Scan, Wine zeigt es danach wieder an, obwohl es für Windows minimiert bleibt. | Das Startskript stellt das Fenster auf Windows-Seite wieder her (`files/RestoreIfMinimized.cs`) |
-| »Beenden« im Menü des Tray-Symbols reagiert nicht. Das Menü öffnet sich mit der Unterkante am Mauszeiger, der unterste Eintrag liegt dadurch über der Leiste, und die fängt unter Cinnamon die Klicks ab. | `SshTaskTray.exe` so patchen, dass es das Menü nach dem Öffnen in die Arbeitsfläche verschiebt (`tools/TrayMenuPatch.cs`, `files/TrayMenuFix.cs`) |
-| Bei mehreren Monitoren verschwindet das Tray-Symbol, zurück bleibt ein schwarzes, nicht klickbares Feld. Wine 9.0 verschiebt angedockte Tray-Symbole um den Versatz des virtuellen Bildschirms, wenn der Hauptmonitor nicht ganz links liegt, und zwar bei jeder Aktualisierung des Symbols erneut (in Wine 10 behoben). | Das Startskript schiebt das Symbol sofort an seinen Platz im Tray zurück |
-| Das Startmenü zeigt das Wine-Symbol statt des ScanSnap-Symbols. | Menüeinträge auf das ScanSnap-Symbol und das Startskript umstellen |
+| The installer reports "cannot be installed on the current version of Windows". The inner installer's manifest only lists Windows 7, so Windows reports version 6.2 to it. | Set the Windows version to Windows 11 and, in a copy of the inner installer, replace the Windows 7 ID in the manifest with the Windows 10 ID |
+| The installer reports "No write permission for the data storage folder" because `GetShellWindow()` returns NULL under Wine. | Redirect the import in the installer copy to `GetFocus()`, provide `GetAppdata.exe` |
+| ScanSnap Home needs .NET 4.7 or newer. | `winetricks dotnet48` |
+| WPF windows stay empty or show artifacts (render thread crash `0x88980406`). | Disable WPF hardware acceleration (`Avalon.Graphics\DisableHWAcceleration`) |
+| Boxes instead of characters: the app asks for "Meiryo UI", and `C:\windows\Fonts` is empty. | `winetricks corefonts tahoma`, DejaVu Sans, replace Meiryo → Arial |
+| The program components talk via WCF named pipes with Windows authentication. Wine provides no credentials for this (SSPI `0x8009030e`). | Set `security mode="None"` in 13 `.config` files and switch the pipe bindings created in code in 7 assemblies the same way (`tools/PipePatch.cs`, using Mono.Cecil). Afterwards all methods are JIT-compiled as a test (`tools/JitCheck.cs`). |
+| Image processing aborts with error −14, text recognition with "General protection fault in engine", error −6/−12 or "all pages empty". Wine's own `concrt140.dll` and `msvcp140.dll` lack functions. | Extract the current native Visual C++ 2015–2022 runtime (x86) directly from `vc_redist.x86.exe` into `syswow64` and set Wine to `native,builtin` |
+| Empty windows ("ScanSnap Home", "Form1") appear at startup, one of them black and fullscreen, and cannot be closed. These are invisible helper forms of `SshRegister.exe`, `SshCloudMonitor.exe` and `PfuSsMon.exe`. | The `scansnap-home` launcher script hides them |
+| The scan window freezes after the scan. ScanSnap Home minimizes it during the scan; Wine shows it again afterwards although it remains minimized as far as Windows is concerned. | The launcher script restores the window on the Windows side (`files/RestoreIfMinimized.cs`) |
+| "Exit" in the tray icon menu does not respond. The menu opens with its bottom edge at the mouse pointer, so the last entry lies over the panel, which intercepts the clicks under Cinnamon. | Patch `SshTaskTray.exe` so that it moves the menu into the work area after opening (`tools/TrayMenuPatch.cs`, `files/TrayMenuFix.cs`) |
+| With several monitors, the tray icon disappears, leaving behind a black, unclickable box. Wine 9.0 shifts docked tray icons by the offset of the virtual screen if the primary monitor is not at the far left, and does so again on every update of the icon (fixed in Wine 10). | The launcher script immediately moves the icon back to its place in the tray |
+| The start menu shows the Wine icon instead of the ScanSnap icon. | Switch menu entries to the ScanSnap icon and the launcher script |
 
-Alle geänderten Programm- und Konfigurationsdateien werden vorher als `*.orig` neben dem Original
-gesichert. Die Menüeinträge von Wine liegen gesichert in `<präfix>/.scansnap-install/desktop-backup/`.
+All modified program and configuration files are backed up beforehand as `*.orig` next to the
+original. Wine's menu entries are backed up in `<prefix>/.scansnap-install/desktop-backup/`.
 
-## Nach einem Update
+## After an update
 
-Ein Update von ScanSnap Home überschreibt die angepassten Dateien. Danach treten die alten Fehler
-wieder auf, zum Beispiel leere Fenster, keine Verbindung zwischen den Programmteilen oder Fehler −14.
-Die Anpassungen lassen sich ohne Neuinstallation erneut anwenden:
+An update of ScanSnap Home overwrites the patched files. The old errors then come back, for example
+empty windows, no connection between the program components, or error −14.
+The tweaks can be applied again without reinstalling:
 
 ```sh
-rm -f "<präfix>/drive_c/Program Files (x86)/PFU/ScanSnap/Home/"*.orig   # nur nach einem Update!
+rm -f "<prefix>/drive_c/Program Files (x86)/PFU/ScanSnap/Home/"*.orig   # only after an update!
 ./install-scansnap-home.sh --post-install-only
 ```
 
-Die `*.orig`-Dateien musst du nur nach einem Update löschen, weil das Skript sonst die alten
-Originale statt der neuen Dateien patcht. Ob eine neuere ScanSnap-Home-Version mit diesen
-Anpassungen funktioniert, ist nicht getestet.
+You only need to delete the `*.orig` files after an update, because otherwise the script patches
+the old originals instead of the new files. Whether a newer ScanSnap Home version works with these
+tweaks has not been tested.
 
-## Dateien
+## Files
 
-| Datei | Zweck |
+| File | Purpose |
 |---|---|
-| `install-scansnap-home.sh` | Installations- und Anpassungsskript |
-| `files/scansnap-home` | Startskript (Python), wird nach `~/.local/bin` installiert |
-| `files/RestoreIfMinimized.cs` | Hilfsprogramm für das Scan-Fenster, läuft in Wine |
-| `tools/PipePatch.cs` | Stellt die im Code erzeugten WCF-Named-Pipe-Bindungen auf `SecurityMode.None` um |
-| `files/TrayMenuFix.cs` | Hält das Tray-Menü oberhalb der Leiste, wird neben `SshTaskTray.exe` installiert |
-| `tools/TrayMenuPatch.cs` | Bindet `TrayMenuFix` in `SshTaskTray.exe` ein |
-| `tools/JitCheck.cs` | Prüft gepatchte Assemblies auf ungültigen IL-Code |
+| `install-scansnap-home.sh` | Installation and patching script |
+| `files/scansnap-home` | Launcher script (Python), installed to `~/.local/bin` |
+| `files/RestoreIfMinimized.cs` | Helper program for the scan window, runs in Wine |
+| `tools/PipePatch.cs` | Switches the WCF named pipe bindings created in code to `SecurityMode.None` |
+| `files/TrayMenuFix.cs` | Keeps the tray menu above the panel, installed next to `SshTaskTray.exe` |
+| `tools/TrayMenuPatch.cs` | Hooks `TrayMenuFix` into `SshTaskTray.exe` |
+| `tools/JitCheck.cs` | Checks patched assemblies for invalid IL code |
 
-Die C#-Quellen übersetzt das Skript mit dem C#-Compiler, der zu .NET Framework 4.8 gehört, innerhalb
-von Wine. Die Werkzeuge liegen danach in `<präfix>/drive_c/scansnap-tools`.
+The script compiles the C# sources inside Wine using the C# compiler that ships with
+.NET Framework 4.8. Afterwards, the tools are located in `<prefix>/drive_c/scansnap-tools`.
 
-## Deinstallieren
+## Uninstalling
 
-Am einfachsten installierst du in ein eigenes Präfix (`--prefix`) und löschst es später samt
-Startskript:
+The easiest way is to install into a separate prefix (`--prefix`) and delete it later together
+with the launcher script:
 
 ```sh
 rm -rf ~/.wine-scansnap ~/.local/bin/scansnap-home ~/.local/share/scansnap-home
 rm -rf ~/.local/share/applications/wine/Programs/ScanSnap*
 ```
 
-## Hinweise
+## Notes
 
-- Dieses Projekt steht in keiner Verbindung zu PFU Limited oder Ricoh. ScanSnap ist eine Marke
-  der PFU Limited.
-- Das Skript verändert nur deine lokal installierte Kopie von ScanSnap Home. Es enthält und
-  verbreitet keine Dateien von PFU. Für die Nutzung von ScanSnap Home gelten dessen Lizenzbedingungen.
-- Die Anpassungen schalten die Windows-Authentifizierung der **lokalen** Named Pipes zwischen den
-  Programmteilen ab. Named Pipes von WCF sind nur auf dem eigenen Rechner erreichbar. Andere
-  Programme desselben Benutzers könnten aber mit den Diensten von ScanSnap Home sprechen.
-- Benutzung auf eigene Gefahr.
+- This project is not affiliated with PFU Limited or Ricoh. ScanSnap is a trademark of
+  PFU Limited.
+- The script only modifies your locally installed copy of ScanSnap Home. It contains and
+  distributes no files from PFU. The license terms of ScanSnap Home apply to its use.
+- The tweaks disable Windows authentication for the **local** named pipes between the program
+  components. WCF named pipes are only reachable on your own machine. However, other programs
+  of the same user could talk to the ScanSnap Home services.
+- Use at your own risk.
 
-## Lizenz
+## License
 
 [MIT](LICENSE)
