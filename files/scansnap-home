@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Start ScanSnap Home under Wine and hide its empty helper windows.
 
-SshRegister.exe ("ScanSnap Home") and SshCloudMonitor.exe ("Form1") create
+SshRegister.exe ("ScanSnap Home"), SshCloudMonitor.exe ("Form1") and PfuSsMon.exe
+("ScanSnap Home", tray icon host) create
 invisible, minimized message-only forms. Under Wine they show up as tiny
 title bars with garbage content, so this script iconifies them and removes
 them from the taskbar/pager while ScanSnap Home is running.
@@ -22,7 +23,7 @@ import time
 WINEPREFIX = os.environ.get("SCANSNAP_WINEPREFIX", "@WINEPREFIX@")  # filled in by install-scansnap-home.sh
 EXE = r"C:\Program Files (x86)\PFU\ScanSnap\Home\PfuSshMain.exe"
 # (WM_CLASS instance, window title) of the helper windows to hide
-HELPERS = {("sshregister.exe", "ScanSnap Home"), ("sshcloudmonitor.exe", "Form1")}
+HELPERS = {("sshregister.exe", "ScanSnap Home"), ("sshcloudmonitor.exe", "Form1"), ("pfussmon.exe", "ScanSnap Home")}
 # Scan window: restore it on the Windows side whenever it is minimized there but shown on X
 SCAN_WINDOW = ("pfusshmain.exe", "ScanSnap Home - Scan")
 RESTORE_IF_MINIMIZED = os.path.expanduser("~/.local/share/scansnap-home/RestoreIfMinimized.exe")
