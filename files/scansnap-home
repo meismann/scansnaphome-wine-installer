@@ -14,10 +14,20 @@ Whenever the scan window is visible on the X side, RestoreIfMinimized.exe
 restores it on the Windows side if Windows still considers it minimized, so
 it stays usable for the next scan. While scanning it is iconified on X and
 left alone.
+
+Tray icons: Wine 9.0 places a docked tray icon inside its tray slot with
+root-window coordinates, i.e. shifted by the virtual-screen offset. When the
+primary monitor is not the leftmost one, every icon update moves the icon
+further out of its slot, leaving an empty, unclickable field in the panel
+(fixed in Wine 10). A thread watches the docked icons of Wine and moves them
+back to the slot origin whenever they are shifted.
 """
 import ctypes
 import os
+import re
+import select
 import subprocess
+import threading
 import time
 
 WINEPREFIX = os.environ.get("SCANSNAP_WINEPREFIX", "@WINEPREFIX@")  # filled in by install-scansnap-home.sh
@@ -30,6 +40,49 @@ RESTORE_IF_MINIMIZED = os.path.expanduser("~/.local/share/scansnap-home/RestoreI
 SCAN_RECHECK_SECONDS = 5
 POLL_SECONDS = 1
 STARTUP_GRACE = 60  # keep watching at least this long after launch
+TRAY_RESCAN_SECONDS = 2
+TRAY_ICON_LINE = re.compile(r'^\s+(0x[0-9a-f]+) .*\("explorer\.exe" "explorer\.exe"\)')
+
+STRUCTURE_NOTIFY_MASK = 1 << 17
+DESTROY_NOTIFY = 17
+CONFIGURE_NOTIFY = 22
+
+
+class XConfigureEvent(ctypes.Structure):  # also matches the leading fields of XDestroyWindowEvent
+    _fields_ = [("type", ctypes.c_int), ("serial", ctypes.c_ulong), ("send_event", ctypes.c_int),
+                ("display", ctypes.c_void_p), ("event", ctypes.c_ulong), ("window", ctypes.c_ulong),
+                ("x", ctypes.c_int), ("y", ctypes.c_int), ("width", ctypes.c_int), ("height", ctypes.c_int),
+                ("border_width", ctypes.c_int), ("above", ctypes.c_ulong), ("override_redirect", ctypes.c_int)]
+
+
+class XEvent(ctypes.Union):
+    _fields_ = [("type", ctypes.c_int), ("xconfigure", XConfigureEvent), ("pad", ctypes.c_long * 24)]
+
+
+x11 = ctypes.cdll.LoadLibrary("libX11.so.6")
+x11.XOpenDisplay.restype = ctypes.c_void_p
+x11.XDefaultScreen.argtypes = [ctypes.c_void_p]
+x11.XIconifyWindow.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int]
+x11.XFlush.argtypes = [ctypes.c_void_p]
+x11.XConnectionNumber.argtypes = [ctypes.c_void_p]
+x11.XPending.argtypes = [ctypes.c_void_p]
+x11.XNextEvent.argtypes = [ctypes.c_void_p, ctypes.POINTER(XEvent)]
+x11.XSelectInput.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_long]
+x11.XMoveWindow.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int, ctypes.c_int]
+x11.XDefaultRootWindow.argtypes = [ctypes.c_void_p]
+x11.XDefaultRootWindow.restype = ctypes.c_ulong
+x11.XInternAtom.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_int]
+x11.XInternAtom.restype = ctypes.c_ulong
+x11.XQueryTree.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.POINTER(ctypes.c_ulong),
+                           ctypes.POINTER(ctypes.c_ulong), ctypes.POINTER(ctypes.c_void_p),
+                           ctypes.POINTER(ctypes.c_uint)]
+x11.XGetWindowProperty.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_long, ctypes.c_long,
+                                   ctypes.c_int, ctypes.c_ulong, ctypes.POINTER(ctypes.c_ulong),
+                                   ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_ulong),
+                                   ctypes.POINTER(ctypes.c_ulong), ctypes.POINTER(ctypes.c_void_p)]
+x11.XFree.argtypes = [ctypes.c_void_p]
+# Windows can vanish between finding and using them; ignore the resulting X errors instead of exiting.
+X_ERROR_HANDLER = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p)(lambda _display, _event: 0)
 
 
 def list_windows():
@@ -50,6 +103,62 @@ def restore_if_minimized_on_windows_side(title, env):
     subprocess.run(["wine", RESTORE_IF_MINIMIZED, title], env=env, capture_output=True, text=True)
 
 
+def is_docked_tray_icon(display, wid):
+    root, parent, children, n = ctypes.c_ulong(), ctypes.c_ulong(), ctypes.c_void_p(), ctypes.c_uint()
+    if not x11.XQueryTree(display, wid, ctypes.byref(root), ctypes.byref(parent), ctypes.byref(children),
+                          ctypes.byref(n)):
+        return False
+    if children:
+        x11.XFree(children)
+    if parent.value == root.value:
+        return False
+    actual_type, fmt, nitems, after, data = (ctypes.c_ulong(), ctypes.c_int(), ctypes.c_ulong(), ctypes.c_ulong(),
+                                             ctypes.c_void_p())
+    xembed_info = x11.XInternAtom(display, b"_XEMBED_INFO", False)
+    if x11.XGetWindowProperty(display, wid, xembed_info, 0, 2, False, 0, ctypes.byref(actual_type),
+                              ctypes.byref(fmt), ctypes.byref(nitems), ctypes.byref(after), ctypes.byref(data)):
+        return False
+    if data:
+        x11.XFree(data)
+    return actual_type.value != 0
+
+
+def find_tray_icons(display):
+    out = subprocess.run(["xwininfo", "-root", "-tree"], capture_output=True, text=True).stdout
+    for line in out.splitlines():
+        m = TRAY_ICON_LINE.match(line)
+        if m and is_docked_tray_icon(display, int(m.group(1), 16)):
+            yield int(m.group(1), 16)
+
+
+def keep_tray_icons_in_slot():
+    display = x11.XOpenDisplay(None)
+    if not display:
+        return
+    watched = set()
+    event = XEvent()
+    next_scan = 0
+    while True:
+        if time.monotonic() >= next_scan:
+            for wid in find_tray_icons(display):
+                if wid not in watched:
+                    watched.add(wid)
+                    x11.XSelectInput(display, wid, STRUCTURE_NOTIFY_MASK)
+                    x11.XMoveWindow(display, wid, 0, 0)
+            next_scan = time.monotonic() + TRAY_RESCAN_SECONDS
+        x11.XFlush(display)
+        select.select([x11.XConnectionNumber(display)], [], [], TRAY_RESCAN_SECONDS)
+        while x11.XPending(display):
+            x11.XNextEvent(display, ctypes.byref(event))
+            ev = event.xconfigure
+            if ev.window not in watched:
+                continue
+            if event.type == DESTROY_NOTIFY:
+                watched.discard(ev.window)
+            elif event.type == CONFIGURE_NOTIFY and (ev.x or ev.y):
+                x11.XMoveWindow(display, ev.window, 0, 0)
+
+
 def scansnap_running():
     out = subprocess.run(["ps", "-eo", "args"], capture_output=True, text=True).stdout
     return any(line.startswith("C:") and "\\PFU\\ScanSnap\\Home\\" in line for line in out.splitlines())
@@ -61,15 +170,13 @@ def main():
     subprocess.Popen(["wine", EXE], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                      start_new_session=True)
 
-    x11 = ctypes.cdll.LoadLibrary("libX11.so.6")
-    x11.XOpenDisplay.restype = ctypes.c_void_p
-    x11.XDefaultScreen.argtypes = [ctypes.c_void_p]
-    x11.XIconifyWindow.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int]
-    x11.XFlush.argtypes = [ctypes.c_void_p]
+    x11.XInitThreads()
+    x11.XSetErrorHandler(X_ERROR_HANDLER)
     display = x11.XOpenDisplay(None)
     if not display:
         return
     screen = x11.XDefaultScreen(display)
+    threading.Thread(target=keep_tray_icons_in_slot, daemon=True).start()
 
     hidden = set()
     scan_checked_at = {}  # scan window id -> time of last Windows-side check while visible
