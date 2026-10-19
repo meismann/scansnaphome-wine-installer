@@ -108,6 +108,7 @@ die Fensterkorrekturen des Startskripts (siehe unten).
 | Bildverarbeitung bricht mit Fehler −14 ab, Texterkennung mit „Allgemeine Schutzverletzung in Engine“, Fehler −6/−12 oder „alle Seiten leer“. Wines eigene `concrt140.dll` und `msvcp140.dll` fehlen Funktionen. | Aktuelle native Visual-C++-2015–2022-Laufzeit (x86) direkt aus `vc_redist.x86.exe` nach `syswow64` entpacken und Wine auf `native,builtin` stellen |
 | Leere Fenster („ScanSnap Home“, „Form1“) erscheinen beim Start, eines davon schwarz und bildschirmfüllend, und lassen sich nicht schließen. Das sind unsichtbare Hilfsformulare von `SshRegister.exe`, `SshCloudMonitor.exe` und `PfuSsMon.exe`. | Das Startskript `scansnap-home` blendet sie aus |
 | Das Scan-Fenster friert nach dem Scan ein. ScanSnap Home minimiert es beim Scan, Wine zeigt es danach wieder an, obwohl es für Windows minimiert bleibt. | Das Startskript stellt das Fenster auf Windows-Seite wieder her (`files/RestoreIfMinimized.cs`) |
+| »Beenden« im Menü des Tray-Symbols reagiert nicht. Das Menü öffnet sich mit der Unterkante am Mauszeiger, der unterste Eintrag liegt dadurch über der Leiste, und die fängt unter Cinnamon die Klicks ab. | `SshTaskTray.exe` so patchen, dass es das Menü nach dem Öffnen in die Arbeitsfläche verschiebt (`tools/TrayMenuPatch.cs`, `files/TrayMenuFix.cs`) |
 | Das Startmenü zeigt das Wine-Symbol statt des ScanSnap-Symbols. | Menüeinträge auf das ScanSnap-Symbol und das Startskript umstellen |
 
 Alle geänderten Programm- und Konfigurationsdateien werden vorher als `*.orig` neben dem Original
@@ -136,6 +137,8 @@ Anpassungen funktioniert, ist nicht getestet.
 | `files/scansnap-home` | Startskript (Python), wird nach `~/.local/bin` installiert |
 | `files/RestoreIfMinimized.cs` | Hilfsprogramm für das Scan-Fenster, läuft in Wine |
 | `tools/PipePatch.cs` | Stellt die im Code erzeugten WCF-Named-Pipe-Bindungen auf `SecurityMode.None` um |
+| `files/TrayMenuFix.cs` | Hält das Tray-Menü oberhalb der Leiste, wird neben `SshTaskTray.exe` installiert |
+| `tools/TrayMenuPatch.cs` | Bindet `TrayMenuFix` in `SshTaskTray.exe` ein |
 | `tools/JitCheck.cs` | Prüft gepatchte Assemblies auf ungültigen IL-Code |
 
 Die C#-Quellen übersetzt das Skript mit dem C#-Compiler, der zu .NET Framework 4.8 gehört, innerhalb

@@ -281,17 +281,21 @@ EOF
 }
 
 build_tools() {
-    log "Hilfswerkzeuge bauen (Mono.Cecil, PipePatch, JitCheck, RestoreIfMinimized)"
+    log "Hilfswerkzeuge bauen (Mono.Cecil, PipePatch, TrayMenuPatch, JitCheck, RestoreIfMinimized)"
     mkdir -p "$TOOLS_DIR" "$CACHE_DIR"
     local nupkg=$CACHE_DIR/mono.cecil.$CECIL_VERSION.nupkg
     [ -s "$nupkg" ] || curl -fsSL -o "$nupkg" "https://www.nuget.org/api/v2/package/Mono.Cecil/$CECIL_VERSION" \
         || die "Download von Mono.Cecil fehlgeschlagen."
     unzip -oqj "$nupkg" 'lib/net40/Mono.Cecil.dll' 'lib/net40/Mono.Cecil.Rocks.dll' -d "$TOOLS_DIR" \
         || die "Entpacken von Mono.Cecil fehlgeschlagen."
-    cp "$REPO_DIR/tools/PipePatch.cs" "$REPO_DIR/tools/JitCheck.cs" "$REPO_DIR/files/RestoreIfMinimized.cs" "$TOOLS_DIR/"
+    cp "$REPO_DIR/tools/PipePatch.cs" "$REPO_DIR/tools/TrayMenuPatch.cs" "$REPO_DIR/tools/JitCheck.cs" \
+        "$REPO_DIR/files/RestoreIfMinimized.cs" "$REPO_DIR/files/TrayMenuFix.cs" "$TOOLS_DIR/"
     (
         cd "$TOOLS_DIR" || exit 1
         wine "$CSC" /nologo /r:Mono.Cecil.dll /r:Mono.Cecil.Rocks.dll /out:PipePatch.exe PipePatch.cs &&
+        wine "$CSC" /nologo /r:Mono.Cecil.dll /r:Mono.Cecil.Rocks.dll /out:TrayMenuPatch.exe TrayMenuPatch.cs &&
+        wine "$CSC" /nologo /target:library /platform:x86 /r:System.Windows.Forms.dll /r:System.Drawing.dll \
+            /out:TrayMenuFix.dll TrayMenuFix.cs &&
         wine "$CSC" /nologo /platform:x86 /out:JitCheck.exe JitCheck.cs &&
         wine "$CSC" /nologo /platform:x86 /out:RestoreIfMinimized.exe RestoreIfMinimized.cs
     ) >/dev/null || die "Kompilieren der Hilfswerkzeuge fehlgeschlagen."
@@ -346,6 +350,32 @@ $result"
     cd - >/dev/null || true
 }
 
+patch_tray_menu() {
+    log "Tray-Menü in die Arbeitsfläche verschieben (SshTaskTray.exe)"
+    # Das Tray-Menü öffnet sich mit der Unterkante am Mauszeiger. »Beenden« liegt dann über der
+    # Leiste, und die nimmt unter Cinnamon alle Klicks in ihrem Bereich an sich.
+    local out=$TOOLS_DIR/out/SshTaskTray.exe result
+    cd "$PFU_HOME" || die "$PFU_HOME fehlt."
+    cp "$TOOLS_DIR/TrayMenuFix.dll" .
+    rm -f "$out"
+    wine "$TOOLS_DIR/TrayMenuPatch.exe" "$(winpath "$PFU_HOME/SshTaskTray.exe")" \
+        "$(winpath "$PFU_HOME/TrayMenuFix.dll")" "$(winpath "$out")" >/dev/null 2>&1
+    case $? in
+        0) [ -s "$out" ] || die "TrayMenuPatch hat keine Datei erzeugt."
+           [ -f SshTaskTray.exe.orig ] || cp -p SshTaskTray.exe SshTaskTray.exe.orig
+           cp "$out" SshTaskTray.exe ;;
+        1) info "Bereits angepasst." ;;
+        *) die "TrayMenuPatch ist bei SshTaskTray.exe fehlgeschlagen." ;;
+    esac
+    cp "$TOOLS_DIR/JitCheck.exe" "$PFU_HOME/zz_JitCheck.exe"
+    result=$(wine zz_JitCheck.exe SshTaskTray.exe 2>&1 | tr -d '\r')
+    rm -f "$PFU_HOME/zz_JitCheck.exe"
+    info "JIT-Prüfung: $(echo "$result" | tail -1)"
+    echo "$result" | grep -q 'invalid 0$' || die "Gepatchtes SshTaskTray.exe enthält ungültigen Code:
+$result"
+    cd - >/dev/null || true
+}
+
 install_launcher() {
     log "Startskript und Menüeinträge einrichten"
     mkdir -p "$(dirname "$LAUNCHER")" "$HELPER_DIR"
@@ -396,6 +426,7 @@ main() {
     patch_pipe_configs
     build_tools
     patch_pipe_assemblies
+    patch_tray_menu
     install_launcher
     stop_wine
 
